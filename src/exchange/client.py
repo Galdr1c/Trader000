@@ -65,6 +65,14 @@ class ExchangeClient:
             logger.warning("funding_rate_error | %s | %s", symbol, e)
             return 0.0
 
+    async def get_open_interest(self, symbol: str) -> dict[str, Any]:
+        """Get open interest for a symbol."""
+        try:
+            return await self.exchange.fetch_open_interest(symbol)
+        except Exception as e:
+            logger.warning("open_interest_error | %s | %s", symbol, e)
+            return {}
+
     async def get_ohlcv(
         self, symbol: str, timeframe: str = "4h", limit: int = 200
     ) -> list[list]:

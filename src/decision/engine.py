@@ -1,6 +1,6 @@
 """Decision Engine — multi-factor trade decision pipeline.
 
-Combines: Technical Signal + Sentiment + AI → Final Decision
+Combines: Technical Signal + Sentiment + Market Data + AI → Final Decision
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ from src.decision.risk import RiskManager
 from src.decision.position import PositionManager, ExitType
 from src.signal_engine.scoring import calculate_signal_strength, SignalResult, SignalWeights
 from src.signal_engine.dynamic_tp import calculate_dynamic_tp
+from src.sentiment.market_data import fetch_market_context
+from src.sentiment.sentiment_pipeline import SentimentCollector
 from src.webhook.models import TVAlertPayload
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ class DecisionEngine:
         self.ai = ai_client
         self.exchange = exchange_client
         self.telegram = telegram
+        self._sentiment = SentimentCollector(ai_client=ai_client)
 
     async def evaluate_alert(self, payload: TVAlertPayload) -> dict[str, Any]:
         """Full evaluation pipeline for an incoming TradingView alert.
@@ -41,9 +44,11 @@ class DecisionEngine:
         Steps:
         1. Risk check (circuit breaker, daily limits)
         2. Signal quality check (min score threshold)
-        3. AI evaluation (if enabled)
-        4. Position sizing
-        5. Order execution
+        3. Fetch real market data + sentiment
+        4. AI evaluation (if enabled)
+        5. Position sizing
+        6. TP/SL calculation
+        7. Order execution
         """
         result: dict[str, Any] = {
             "action": "none",
@@ -66,7 +71,42 @@ class DecisionEngine:
             logger.info("trade_rejected_low_score | %.1f", payload.signal_score)
             return result
 
-        # ── Step 3: AI Evaluation ─────────────────────────────────
+        # ── Step 3: Fetch Real Market Data + Sentiment ────────────
+        market_context: dict[str, Any] = {
+            "funding_rate": 0,
+            "oi_change": 0,
+            "fear_greed": 50,
+            "volume_change": 0,
+        }
+        sentiment_result = None
+
+        if settings.sentiment_enabled:
+            try:
+                # Fetch sentiment (news + fear & greed + social)
+                sentiment_result = await self._sentiment.collect(
+                    coin=payload.symbol.split("/")[0] if "/" in payload.symbol else payload.symbol.replace("USDT", "")
+                )
+            except Exception as e:
+                logger.warning("sentiment_fetch_error | %s", e)
+
+        if self.exchange:
+            try:
+                # Fetch real market context (funding rate, OI, volume)
+                market_context = await fetch_market_context(
+                    self.exchange, payload.symbol
+                )
+            except Exception as e:
+                logger.warning("market_context_fetch_error | %s", e)
+
+        # Enrich sentiment data for AI prompt
+        sentiment_data: dict[str, Any] = {
+            "news_count": sentiment_result.news_count if sentiment_result else 0,
+            "pos_neg_ratio": sentiment_result.pos_neg_ratio if sentiment_result else 0.5,
+            "social_mentions": 0,
+            "sentiment_score": sentiment_result.score if sentiment_result else 0,
+        }
+
+        # ── Step 4: AI Evaluation ─────────────────────────────────
         ai_decision = None
         risk_level = "medium"
 
@@ -75,25 +115,13 @@ class DecisionEngine:
                 "symbol": payload.symbol,
                 "direction": payload.direction.value,
                 "score": payload.signal_score,
-                "adx": 0,
+                "adx": 0,  # TODO: extract from webhook payload
                 "di_plus": 0,
                 "di_minus": 0,
                 "rsi": 50,
                 "tp_distance": payload.tp_distance,
                 "vwap_score": 0,
                 "macd_score": 0,
-            }
-            market_context = {
-                "funding_rate": 0,
-                "oi_change": 0,
-                "fear_greed": 50,
-                "volume_change": 0,
-            }
-            sentiment_data = {
-                "news_count": 0,
-                "pos_neg_ratio": 0.5,
-                "social_mentions": 0,
-                "sentiment_score": 0,
             }
 
             ai_decision = await self.ai.evaluate_signal(
@@ -109,8 +137,12 @@ class DecisionEngine:
             result["ai_confidence"] = ai_decision.confidence
             result["ai_reason"] = ai_decision.reason
 
-        # ── Step 4: Position Sizing ───────────────────────────────
-        equity = 100_000.0  # TODO: fetch from exchange
+        # Attach full context to result for logging/debugging
+        result["market_context"] = market_context
+        result["sentiment_score"] = sentiment_result.score if sentiment_result else 0.0
+
+        # ── Step 5: Position Sizing ───────────────────────────────
+        equity = 100_000.0  # TODO: fetch from exchange balance
         position_pct = self.risk.calculate_position_size(
             equity, payload.signal_score, risk_level
         )
@@ -120,7 +152,7 @@ class DecisionEngine:
         result["position_pct"] = position_pct
         result["quantity"] = round(quantity, 6)
 
-        # ── Step 5: TP/SL Calculation ─────────────────────────────
+        # ── Step 6: TP/SL Calculation ─────────────────────────────
         tp_distance = payload.tp_distance
         if ai_decision and ai_decision.tp_adjustment:
             tp_distance += ai_decision.tp_adjustment
@@ -133,7 +165,7 @@ class DecisionEngine:
             stop_price = payload.price * (1 + settings.atr_multiplier * 0.02)
             max_loss_price = payload.price * (1 + settings.max_loss_pct / 100)
 
-        # ── Step 6: Execute ───────────────────────────────────────
+        # ── Step 7: Execute ───────────────────────────────────────
         if self.exchange:
             try:
                 order = await self.exchange.place_market_order(

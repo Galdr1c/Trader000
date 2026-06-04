@@ -84,13 +84,20 @@ class Settings(BaseSettings):
 
     # ── Sentiment ─────────────────────────────────────────────────
     sentiment_enabled: bool = True
+    cryptopanic_api_key: str = ""
+    cryptopanic_api_url: str = "https://cryptopanic.com/api/v1/posts/"
     rss_feeds: list[str] = Field(
         default=[
             "https://cointelegraph.com/rss",
             "https://decrypt.co/feed",
+            "https://www.theblock.co/rss.xml",
         ]
     )
     fear_greed_api_url: str = "https://api.alternative.me/fng/"
+
+    # ── Market Data ───────────────────────────────────────────────
+    funding_rate_alert_threshold: float = 0.01  # 1% = extreme
+    oi_change_alert_threshold: float = 10.0  # 10% change = notable
 
     # ── Logging ───────────────────────────────────────────────────
     log_level: str = "INFO"
