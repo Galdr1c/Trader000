@@ -102,17 +102,24 @@ class SentimentCollector:
         # ── Step 4: AI-enhanced score (if available) ──────────────
         if self._ai and settings.ai_enabled and news_count > 0:
             try:
-                ai_score = await self._ai.analyze_sentiment(
+                ai_result = await self._ai.analyze_sentiment(
                     news=news,
                     tweets=twitter_text,
                     reddit=reddit_text,
                     fear_greed=fear_greed,
                     coin=coin,
                 )
+                # Handle both SentimentDecision object and plain float
+                if hasattr(ai_result, "score"):
+                    ai_score = ai_result.score
+                    ai_confidence = ai_result.confidence
+                else:
+                    ai_score = float(ai_result)
+                    ai_confidence = 0.8
                 # Weighted average: 60% AI, 40% rule-based
                 final_score = 0.6 * ai_score + 0.4 * rule_score
                 reason = f"AI+rule composite: AI={ai_score:.2f}, rule={rule_score:.2f}"
-                confidence = 0.8
+                confidence = 0.6 * ai_confidence + 0.4 * 0.5
             except Exception as e:
                 logger.warning("ai_sentiment_error | %s", e)
                 final_score = rule_score

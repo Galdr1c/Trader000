@@ -15,6 +15,8 @@ from src.signal_engine.scoring import calculate_signal_strength, SignalResult, S
 from src.signal_engine.dynamic_tp import calculate_dynamic_tp
 from src.sentiment.market_data import fetch_market_context
 from src.sentiment.sentiment_pipeline import SentimentCollector
+from src.ai_layer.composite_scorer import CompositeScorer
+from src.ai_layer.decision_logger import AIDecisionLogger
 from src.webhook.models import TVAlertPayload
 
 logger = logging.getLogger(__name__)
@@ -37,6 +39,8 @@ class DecisionEngine:
         self.exchange = exchange_client
         self.telegram = telegram
         self._sentiment = SentimentCollector(ai_client=ai_client)
+        self._scorer = CompositeScorer()
+        self._decision_log = AIDecisionLogger()
 
     async def evaluate_alert(self, payload: TVAlertPayload) -> dict[str, Any]:
         """Full evaluation pipeline for an incoming TradingView alert.
@@ -104,9 +108,7 @@ class DecisionEngine:
             "pos_neg_ratio": sentiment_result.pos_neg_ratio if sentiment_result else 0.5,
             "social_mentions": 0,
             "sentiment_score": sentiment_result.score if sentiment_result else 0,
-        }
-
-        # ── Step 4: AI Evaluation ─────────────────────────────────
+        }        # ── Step 4: AI Evaluation ─────────────────────────────────
         ai_decision = None
         risk_level = "medium"
 
@@ -131,11 +133,65 @@ class DecisionEngine:
             if not ai_decision.approved:
                 result["reason"] = f"ai_rejected: {ai_decision.reason}"
                 logger.info("trade_rejected_ai | %s", ai_decision.reason)
+
+                # Log the rejection
+                self._decision_log.log_signal_eval(
+                    symbol=payload.symbol,
+                    direction=payload.direction.value,
+                    signal_score=payload.signal_score,
+                    approved=False,
+                    ai_confidence=ai_decision.confidence,
+                    ai_risk_level=ai_decision.risk_level,
+                    ai_reason=ai_decision.reason,
+                    tp_adjustment=ai_decision.tp_adjustment,
+                    funding_rate=market_context.get("funding_rate", 0),
+                    fear_greed=market_context.get("fear_greed", 50),
+                    volume_ratio=market_context.get("volume_ratio", 1.0),
+                    sentiment_score=sentiment_data.get("sentiment_score", 0),
+                    latency_ms=ai_decision.latency_ms,
+                    model=ai_decision.model,
+                )
                 return result
 
             risk_level = ai_decision.risk_level
             result["ai_confidence"] = ai_decision.confidence
             result["ai_reason"] = ai_decision.reason
+
+        # ── Step 4b: Composite Scoring ──────────────────────────
+        composite = self._scorer.score(
+            technical_score=payload.signal_score,
+            sentiment_score=sentiment_result.score if sentiment_result else 0.0,
+            sentiment_confidence=sentiment_result.confidence if sentiment_result else 0.5,
+            ai_approved=ai_decision.approved if ai_decision else None,
+            ai_confidence=ai_decision.confidence if ai_decision else 0,
+            ai_risk_level=risk_level,
+            funding_rate=market_context.get("funding_rate", 0),
+            funding_extreme=market_context.get("funding_is_extreme", False),
+            volume_ratio=market_context.get("volume_ratio", 1.0),
+            fear_greed=market_context.get("fear_greed", 50),
+        )
+        result["composite_score"] = composite.score
+        result["composite_decision"] = composite.decision
+
+        # Log the approved evaluation
+        self._decision_log.log_signal_eval(
+            symbol=payload.symbol,
+            direction=payload.direction.value,
+            signal_score=payload.signal_score,
+            approved=True,
+            ai_confidence=ai_decision.confidence if ai_decision else 0,
+            ai_risk_level=risk_level,
+            ai_reason=ai_decision.reason if ai_decision else "AI disabled",
+            tp_adjustment=ai_decision.tp_adjustment if ai_decision else 0.0,
+            funding_rate=market_context.get("funding_rate", 0),
+            fear_greed=market_context.get("fear_greed", 50),
+            volume_ratio=market_context.get("volume_ratio", 1.0),
+            sentiment_score=sentiment_data.get("sentiment_score", 0),
+            latency_ms=ai_decision.latency_ms if ai_decision else 0,
+            model=ai_decision.model if ai_decision else "",
+            composite_score=composite.score,
+            composite_decision=composite.decision,
+        )
 
         # Attach full context to result for logging/debugging
         result["market_context"] = market_context
