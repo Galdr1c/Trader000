@@ -87,7 +87,9 @@ async def test_health_check():
         assert r.status_code == 200
         body = r.json()
         assert body["status"] == "ok"
-        print(f"[PASS] Health check (engine={body['engine']})")
+        assert "uptime_seconds" in body
+        assert "alerts_processed" in body
+        print(f"[PASS] Health check (uptime={body['uptime_seconds']}s)")
         return body
 
 

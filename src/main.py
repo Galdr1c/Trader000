@@ -19,7 +19,7 @@ from src.monitoring.logger import setup_logging
 from src.decision.engine import DecisionEngine
 from src.decision.risk import RiskManager
 from src.decision.position import PositionManager
-from src.webhook.server import create_app, set_engine
+from src.webhook.server import create_app, set_engine, set_clients
 from src.monitoring.telegram import TelegramNotifier
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,7 @@ async def lifespan(app: FastAPI):
         telegram=telegram,
     )
     set_engine(engine)
+    set_clients(exchange_client=exchange_client, ai_client=ai_client)
 
     logger.info(
         "svtr_bot_ready | exchange=%s | ai=%s | symbol=%s | tf=%s | min_score=%.1f",
@@ -82,10 +83,12 @@ async def lifespan(app: FastAPI):
 
     await telegram.send_status(
         f"🚀 <b>SVTR Bot Started</b>\n"
-        f"Exchange: {settings.exchange_id}\n"
+        f"Exchange: {settings.exchange_id}{' (testnet)' if settings.exchange_testnet else ''}\n"
         f"Symbol: {settings.trading_symbol}\n"
         f"Timeframe: {settings.timeframe.value}\n"
-        f"Min Score: {settings.min_signal_score}"
+        f"Min Score: {settings.min_signal_score}\n"
+        f"AI: {'ON' if settings.ai_enabled and ai_client else 'OFF'}\n"
+        f"Sentiment: {'ON' if settings.sentiment_enabled else 'OFF'}"
     )
 
     yield

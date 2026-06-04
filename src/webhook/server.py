@@ -9,11 +9,14 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
+from starlette.responses import PlainTextResponse
 
 from src.config import settings
+from src.monitoring.system import get_system_status, get_liveness, get_prometheus_metrics, record_alert
 from src.webhook.models import TVAlertPayload, WebhookResponse
 
 if TYPE_CHECKING:
@@ -21,14 +24,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# This gets injected at startup — avoids circular imports
+# These get injected at startup — avoids circular imports
 _engine: "DecisionEngine | None" = None
+_exchange_client: Any = None
+_ai_client: Any = None
 
 
 def set_engine(engine: "DecisionEngine") -> None:
     """Inject the decision engine at startup."""
     global _engine  # noqa: PLW0603
     _engine = engine
+
+
+def set_clients(exchange_client: Any = None, ai_client: Any = None) -> None:
+    """Inject exchange and AI clients for status monitoring."""
+    global _exchange_client, _ai_client  # noqa: PLW0603
+    _exchange_client = exchange_client
+    _ai_client = ai_client
 
 
 def _verify_signature(body: bytes, signature: str) -> bool:
@@ -82,6 +94,7 @@ async def handle_webhook(
         )
 
     result = await _engine.evaluate_alert(payload)
+    record_alert()
 
     return WebhookResponse(
         status="ok",
@@ -93,7 +106,26 @@ async def handle_webhook(
 
 
 async def health() -> dict:
-    return {"status": "ok", "engine": _engine is not None}
+    """Quick liveness check — always fast, no external calls."""
+    return get_liveness()
+
+
+async def status() -> JSONResponse:
+    """Detailed system status dashboard."""
+    status_data = get_system_status(
+        exchange_client=_exchange_client,
+        ai_client=_ai_client,
+    )
+    return JSONResponse(content=status_data.to_dict())
+
+
+async def metrics() -> PlainTextResponse:
+    """Prometheus-compatible metrics endpoint."""
+    text = get_prometheus_metrics(
+        exchange_client=_exchange_client,
+        ai_client=_ai_client,
+    )
+    return PlainTextResponse(content=text, media_type="text/plain")
 
 
 def create_app(lifespan=None) -> FastAPI:
@@ -101,6 +133,8 @@ def create_app(lifespan=None) -> FastAPI:
     _app = FastAPI(title="SVTR Bot Webhook", version="1.0.0", lifespan=lifespan)
     _app.add_api_route("/webhook", handle_webhook, methods=["POST"], response_model=WebhookResponse)
     _app.add_api_route("/health", health, methods=["GET"])
+    _app.add_api_route("/status", status, methods=["GET"])
+    _app.add_api_route("/metrics", metrics, methods=["GET"])
     return _app
 
 

@@ -25,6 +25,9 @@ dependencies = [
     "websockets>=12.0",
     "apscheduler>=3.10.4",
 ]
+# NOTE: agent-reach is a setup prerequisite, not a runtime dependency.
+# Install before first run: pipx install agent-reach && agent-reach install
+# It installs twitter-cli and rdt-cli which social.py invokes via subprocess.
 
 [project.optional-dependencies]
 dev = [

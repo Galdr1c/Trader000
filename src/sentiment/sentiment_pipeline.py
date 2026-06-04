@@ -135,8 +135,8 @@ class SentimentCollector:
             sources={
                 "fear_greed": fear_greed,
                 "news_count": news_count,
-                "twitter_available": bool(twitter_text and "[not available" not in twitter_text.lower()),
-                "reddit_available": bool(reddit_text and "[not available" not in reddit_text.lower()),
+                "twitter_available": bool(twitter_text and "not installed" not in twitter_text.lower()),
+                "reddit_available": bool(reddit_text and "not installed" not in reddit_text.lower()),
             },
         )
 

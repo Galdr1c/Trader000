@@ -189,24 +189,22 @@ class TestSocial:
     @pytest.mark.asyncio
     async def test_twitter_sentiment_no_cli(self):
         """When twitter-cli is not installed, returns placeholder."""
-        from src.sentiment.social import get_twitter_sentiment
+        from src.sentiment.social import get_twitter_sentiment, _tool_status
 
-        with patch("src.sentiment.social.subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError("twitter not found")
-
+        _tool_status.clear()  # Reset cache
+        with patch("src.sentiment.social.shutil.which", return_value=None):
             result = await get_twitter_sentiment("BTC")
-            assert "[not available" in result.lower() or "twitter-cli" in result.lower()
+            assert "twitter-cli" in result.lower()
 
     @pytest.mark.asyncio
     async def test_reddit_sentiment_no_cli(self):
         """When rdt-cli is not installed, returns placeholder."""
-        from src.sentiment.social import get_reddit_sentiment
+        from src.sentiment.social import get_reddit_sentiment, _tool_status
 
-        with patch("src.sentiment.social.subprocess.run") as mock_run:
-            mock_run.side_effect = FileNotFoundError("rdt not found")
-
+        _tool_status.clear()  # Reset cache
+        with patch("src.sentiment.social.shutil.which", return_value=None):
             result = await get_reddit_sentiment("BTC")
-            assert "[not available" in result.lower() or "rdt-cli" in result.lower()
+            assert "rdt-cli" in result.lower()
 
 
 # ═══════════════════════════════════════════════════════════════════════
