@@ -1,3 +1,58 @@
-/nul
-/svtr.pine
-/svtr_ai_trading_bot_analysis.html
+# ═══════════════════════════════════════════════════════════════
+# SVTR Project .gitignore
+# ═══════════════════════════════════════════════════════════════
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+*.spec
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+Thumbs.db
+Desktop.ini
+.DS_Store
+nul
+
+# --- Environment secrets (NEVER commit) ---
+.env
+.env.local
+.env.production
+
+# --- Data & Logs ---
+data/
+logs/
+*.log
+
+# --- Docker ---
+docker-compose.override.yml
+
+# --- Testing ---
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# --- Pine Script (optional — uncomment if you don't want to track .pine) ---
+*.pine
+
+# --- Analysis reports (generated, track if desired) ---
+svtr_ai_trading_bot_analysis.html

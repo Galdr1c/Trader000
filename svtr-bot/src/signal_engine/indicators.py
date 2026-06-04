@@ -1,32 +1,54 @@
-"""Technical indicators — pandas-ta reimplementation of Pine Script calculations.
+"""Technical indicators — pure numpy/pandas implementation.
 
-Mirrors the indicator calculations from svtr.pine v3.8 with session-aware VWAP.
+No external TA library dependency. Implements all indicators from svtr.pine v3.8:
+- Session VWAP (smoothed with SMA)
+- MACD (EMA-based)
+- RSI (Wilder's smoothing)
+- ADX / +DI / -DI (Wilder's method)
+- ATR
+- Rate of Change (ROC)
+- Exponential Moving Average (EMA)
 """
 
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Core helpers
+# ═══════════════════════════════════════════════════════════════════════
+
+def ema(series: pd.Series, length: int) -> pd.Series:
+    """Exponential Moving Average."""
+    return series.ewm(span=length, adjust=False).mean()
+
+
+def sma(series: pd.Series, length: int) -> pd.Series:
+    """Simple Moving Average."""
+    return series.rolling(window=length, min_periods=1).mean()
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# Indicator implementations
+# ═══════════════════════════════════════════════════════════════════════
 
 def compute_vwap(
     df: pd.DataFrame,
     smoothing: int = 10,
-    anchor: str | None = None,
 ) -> pd.Series:
     """Session VWAP smoothed with SMA.
 
     Pine Script: ``ta.sma(ta.vwap(close), sensitivity)``
-    When *anchor* is ``None`` the raw session VWAP is used (resets each
-    trading session).  ``anchor`` can be ``"D"`` for daily, ``"W"`` for
-    weekly, etc.  If you need anchored VWAP that persists across sessions
-    (e.g. for 4H+ crypto), pass ``anchor="D"``.
+    Uses cumulative (price*volume) / cumulative(volume) for VWAP,
+    then smooths with SMA.
     """
-    vwap_raw = ta.vwap(df["high"], df["low"], df["close"], df["volume"], anchor=anchor)
-    if smoothing > 1:
-        return ta.sma(vwap_raw, length=smoothing)
-    return vwap_raw
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3.0
+    cum_tpv = (typical_price * df["volume"]).cumsum()
+    cum_vol = df["volume"].cumsum()
+    vwap_raw = cum_tpv / cum_vol.replace(0, np.nan)
+    return sma(vwap_raw, smoothing)
 
 
 def compute_macd(
@@ -36,51 +58,92 @@ def compute_macd(
     signal: int = 9,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
     """MACD line, signal line, histogram."""
-    macd = ta.macd(df["close"], fast=fast, slow=slow, signal=signal)
-    macd_col = f"MACD_{fast}_{slow}_{signal}"
-    signal_col = f"MACDs_{fast}_{slow}_{signal}"
-    hist_col = f"MACDh_{fast}_{slow}_{signal}"
-    return macd[macd_col], macd[signal_col], macd[hist_col]
+    macd_line = ema(df["close"], fast) - ema(df["close"], slow)
+    signal_line = ema(macd_line, signal)
+    histogram = macd_line - signal_line
+    return macd_line, signal_line, histogram
 
 
 def compute_rsi(df: pd.DataFrame, length: int = 14) -> pd.Series:
-    """Relative Strength Index."""
-    return ta.rsi(df["close"], length=length)
+    """RSI using Wilder's smoothing method."""
+    delta = df["close"].diff()
+    gain = delta.where(delta > 0, 0.0)
+    loss = (-delta).where(delta < 0, 0.0)
+
+    avg_gain = gain.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    rsi = 100.0 - (100.0 / (1.0 + rs))
+    return rsi.fillna(50.0)
+
+
+def compute_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
+    """Average True Range using Wilder's smoothing."""
+    high = df["high"]
+    low = df["low"]
+    prev_close = df["close"].shift(1)
+
+    tr1 = high - low
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = true_range.ewm(alpha=1.0 / length, min_periods=length, adjust=False).mean()
+    return atr
 
 
 def compute_adx(
     df: pd.DataFrame, length: int = 14
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
-    """ADX, +DI, -DI."""
-    dmi = ta.adx(df["high"], df["low"], df["close"], length=length)
-    adx_col = f"ADX_{length}"
-    dip_col = f"DMP_{length}"
-    dim_col = f"DMN_{length}"
-    return dmi[adx_col], dmi[dip_col], dmi[dim_col]
+    """ADX, +DI, -DI using Wilder's method."""
+    high = df["high"]
+    low = df["low"]
+    prev_high = high.shift(1)
+    prev_low = low.shift(1)
 
+    plus_dm = (high - prev_high).clip(lower=0)
+    minus_dm = (prev_low - low).clip(lower=0)
 
-def compute_atr(df: pd.DataFrame, length: int = 14) -> pd.Series:
-    """Average True Range."""
-    return ta.atr(df["high"], df["low"], df["close"], length=length)
+    # When +DM > -DM, keep +DM, else 0 (and vice versa)
+    plus_dm = plus_dm.where(plus_dm > minus_dm, 0.0)
+    minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
+
+    atr = compute_atr(df, length)
+    atr_safe = atr.replace(0, np.nan)
+
+    di_plus = 100.0 * ema(plus_dm, length) / atr_safe
+    di_minus = 100.0 * ema(minus_dm, length) / atr_safe
+
+    di_sum = di_plus + di_minus
+    dx = 100.0 * (di_plus - di_minus).abs() / di_sum.replace(0, np.nan)
+    adx = ema(dx.fillna(0.0), length)
+
+    return adx.fillna(0.0), di_plus.fillna(0.0), di_minus.fillna(0.0)
 
 
 def compute_roc(df: pd.DataFrame, length: int = 10) -> pd.Series:
     """Rate of Change (%)."""
-    return ta.roc(df["close"], length=length)
+    prev = df["close"].shift(length)
+    return ((df["close"] - prev) / prev.replace(0, np.nan) * 100.0).fillna(0.0)
 
 
 def compute_ema(df: pd.DataFrame, length: int = 200) -> pd.Series:
     """Exponential Moving Average (main trend filter)."""
-    return ta.ema(df["close"], length=length)
+    return ema(df["close"], length)
 
 
 def compute_volume_filter(
     df: pd.DataFrame, sma_length: int = 20, multiplier: float = 0.5
 ) -> pd.Series:
     """Boolean series — True when volume > SMA(volume) * multiplier."""
-    avg_vol = ta.sma(df["volume"], length=sma_length)
+    avg_vol = sma(df["volume"], sma_length)
     return df["volume"] > (avg_vol * multiplier)
 
+
+# ═══════════════════════════════════════════════════════════════════════
+# Combined computation
+# ═══════════════════════════════════════════════════════════════════════
 
 def compute_all(
     df: pd.DataFrame,
@@ -96,7 +159,6 @@ def compute_all(
     trend_ma_length: int = 200,
     volume_sma_length: int = 20,
     volume_multiplier: float = 0.5,
-    vwap_anchor: str | None = None,
 ) -> pd.DataFrame:
     """Compute all indicators and attach as columns to *df*.
 
@@ -105,7 +167,7 @@ def compute_all(
     """
     out = df.copy()
 
-    out["vwap"] = compute_vwap(out, smoothing=vwap_smoothing, anchor=vwap_anchor)
+    out["vwap"] = compute_vwap(out, smoothing=vwap_smoothing)
     out["macd_line"], out["macd_signal"], out["macd_hist"] = compute_macd(
         out, fast=macd_fast, slow=macd_slow, signal=macd_signal
     )
@@ -124,5 +186,17 @@ def compute_all(
 
     # Previous close for crossover detection
     out["prev_close"] = out["close"].shift(1)
+
+    # Lagged values for scoring (RSI consistency, MACD acceleration, etc.)
+    out["rsi_prev1"] = out["rsi"].shift(1)
+    out["rsi_prev2"] = out["rsi"].shift(2)
+    out["macd_hist_prev"] = out["macd_hist"].shift(1)
+    out["macd_hist_prev2"] = out["macd_hist"].shift(2)
+    out["di_plus_prev"] = out["di_plus"].shift(1)
+    out["di_minus_prev"] = out["di_minus"].shift(1)
+    out["adx_prev"] = out["adx"].shift(1)
+
+    # avg_volume for scoring
+    out["avg_volume"] = sma(out["volume"], volume_sma_length)
 
     return out

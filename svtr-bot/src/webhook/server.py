@@ -21,8 +21,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="SVTR Bot Webhook", version="1.0.0")
-
 # This gets injected at startup — avoids circular imports
 _engine: "DecisionEngine | None" = None
 
@@ -36,29 +34,23 @@ def set_engine(engine: "DecisionEngine") -> None:
 def _verify_signature(body: bytes, signature: str) -> bool:
     """Verify HMAC signature from TradingView (optional security layer)."""
     if not settings.webhook_secret:
-        return True  # Skip verification when no secret is configured
+        return True
     expected = hmac.new(
         settings.webhook_secret.encode(), body, hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
 
 
-@app.post("/webhook", response_model=WebhookResponse)
 async def handle_webhook(
     request: Request,
     x_tv_signature: str = Header(default=""),
 ) -> WebhookResponse:
-    """Main webhook endpoint for TradingView alerts.
-
-    Accepts JSON or plain-text alert bodies from TradingView.
-    """
+    """Main webhook endpoint for TradingView alerts."""
     body = await request.body()
 
-    # Optional signature verification
     if settings.webhook_secret and not _verify_signature(body, x_tv_signature):
         raise HTTPException(status_code=401, detail="Invalid signature")
 
-    # Parse payload — try JSON first, then plain text
     content_type = request.headers.get("content-type", "")
     if "json" in content_type:
         try:
@@ -80,7 +72,6 @@ async def handle_webhook(
         payload.signal_score,
     )
 
-    # Route to decision engine
     if _engine is None:
         logger.warning("decision_engine_not_initialized — alert ignored")
         return WebhookResponse(status="ignored", message="Engine not ready")
@@ -95,6 +86,16 @@ async def handle_webhook(
     )
 
 
-@app.get("/health")
 async def health() -> dict:
     return {"status": "ok", "engine": _engine is not None}
+
+
+def create_app(lifespan=None) -> FastAPI:
+    """Create the FastAPI app with optional lifespan."""
+    _app = FastAPI(title="SVTR Bot Webhook", version="1.0.0", lifespan=lifespan)
+    _app.add_api_route("/webhook", handle_webhook, methods=["POST"], response_model=WebhookResponse)
+    _app.add_api_route("/health", health, methods=["GET"])
+    return _app
+
+
+app = create_app()

@@ -59,11 +59,19 @@ class PositionState:
             return (current_price - self.entry_price) / self.entry_price * 100
         return (self.entry_price - current_price) / self.entry_price * 100
 
-    def unrealized_from_peak(self) -> float:
-        """Calculate how far price has pulled back from peak in %."""
+    def peak_profit_pct(self) -> float:
+        """Calculate the maximum unrealized profit from entry in %."""
         if self.side == "long":
             return (self.highest_price - self.entry_price) / self.entry_price * 100
         return (self.entry_price - self.lowest_price) / self.entry_price * 100
+
+    def pullback_from_peak(self) -> float:
+        """Calculate how far price has pulled back from peak in %."""
+        if self.side == "long" and self.highest_price > self.entry_price:
+            return (self.highest_price - self.entry_price) / self.entry_price * 100
+        elif self.side == "short" and self.lowest_price < self.entry_price:
+            return (self.entry_price - self.lowest_price) / self.entry_price * 100
+        return 0.0
 
     def close(self, exit_type: ExitType, exit_price: float) -> None:
         """Close the position."""

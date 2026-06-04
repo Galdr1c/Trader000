@@ -30,7 +30,7 @@ class ClaudeClient:
     """Async wrapper around the Anthropic Claude API."""
 
     def __init__(self) -> None:
-        self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+        self._client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
         self._model = settings.anthropic_model
         self._max_tokens = settings.ai_max_tokens
 
@@ -49,7 +49,7 @@ class ClaudeClient:
                 signal_data, market_context, sentiment_data
             )
 
-            response = self._client.messages.create(
+            response = await self._client.messages.create(
                 model=self._model,
                 max_tokens=self._max_tokens,
                 messages=[{"role": "user", "content": prompt}],
@@ -99,7 +99,7 @@ Fear & Greed Index: {fear_greed}/100
 
 Return ONLY a JSON object: {{"score": <float from -1.0 to 1.0>, "reason": "<brief explanation>"}}
 """
-            response = self._client.messages.create(
+            response = await self._client.messages.create(
                 model=self._model,
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
