@@ -5,6 +5,7 @@ Combines: Technical Signal + Sentiment + Market Data + AI → Final Decision
 
 from __future__ import annotations
 
+import datetime
 import logging
 from typing import Any
 
@@ -17,6 +18,7 @@ from src.sentiment.market_data import fetch_market_context
 from src.sentiment.sentiment_pipeline import SentimentCollector
 from src.ai_layer.composite_scorer import CompositeScorer
 from src.ai_layer.decision_logger import AIDecisionLogger
+from src.ai_layer.trading_agents import TradingAgentsDecisionClient
 from src.webhook.models import TVAlertPayload
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ class DecisionEngine:
         ai_client: Any = None,  # ClaudeClient
         exchange_client: Any = None,  # ExchangeClient
         telegram: Any = None,  # TelegramNotifier
+        trading_agents_client: TradingAgentsDecisionClient | None = None,
     ) -> None:
         self.risk = risk_manager
         self.positions = position_manager
@@ -41,6 +44,7 @@ class DecisionEngine:
         self._sentiment = SentimentCollector(ai_client=ai_client)
         self._scorer = CompositeScorer()
         self._decision_log = AIDecisionLogger()
+        self._ta = trading_agents_client
 
     async def evaluate_alert(self, payload: TVAlertPayload) -> dict[str, Any]:
         """Full evaluation pipeline for an incoming TradingView alert.
@@ -157,7 +161,54 @@ class DecisionEngine:
             result["ai_confidence"] = ai_decision.confidence
             result["ai_reason"] = ai_decision.reason
 
-        # ── Step 4b: Composite Scoring ──────────────────────────
+        # ── Step 4b: TradingAgents Multi-Agent Evaluation ────────
+        ta_decision = None
+        if self._ta and settings.anthropic_api_key:
+            try:
+                coin = (
+                    payload.symbol.split("/")[0]
+                    if "/" in payload.symbol
+                    else payload.symbol.replace("USDT", "").replace("USD", "")
+                )
+                ta_decision = await self._ta.analyze(
+                    symbol=coin,
+                    date=datetime.date.today().isoformat(),
+                )
+                logger.info(
+                    "trading_agents_decision | symbol=%s | approved=%s | confidence=%d | dir=%s",
+                    coin,
+                    ta_decision.get("approved"),
+                    ta_decision.get("confidence", 0),
+                    ta_decision.get("direction", "?"),
+                )
+
+                # TradingAgents rejection can override AI approval
+                if not ta_decision.get("approved"):
+                    result["reason"] = f"trading_agents_rejected: {ta_decision.get('reason', '')}"
+                    logger.info("trade_rejected_ta | %s", ta_decision.get("reason"))
+                    self._decision_log.log_signal_eval(
+                        symbol=payload.symbol,
+                        direction=payload.direction.value,
+                        signal_score=payload.signal_score,
+                        approved=False,
+                        ai_confidence=ta_decision.get("confidence", 0),
+                        ai_risk_level=ta_decision.get("risk_level", "high"),
+                        ai_reason=ta_decision.get("reason", "TradingAgents rejected"),
+                        tp_adjustment=ta_decision.get("tp_adjustment", 0.0),
+                        funding_rate=market_context.get("funding_rate", 0),
+                        fear_greed=market_context.get("fear_greed", 50),
+                        volume_ratio=market_context.get("volume_ratio", 1.0),
+                        sentiment_score=sentiment_data.get("sentiment_score", 0),
+                        latency_ms=0,
+                        model="tradingagents",
+                    )
+                    return result
+
+            except Exception as e:
+                logger.warning("trading_agents_eval_error | %s", e)
+                # Don't block trade if TradingAgents fails — log and continue
+
+        # ── Step 4c: Composite Scoring ─────────────────────────
         composite = self._scorer.score(
             technical_score=payload.signal_score,
             sentiment_score=sentiment_result.score if sentiment_result else 0.0,

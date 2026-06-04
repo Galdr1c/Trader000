@@ -1,8 +1,9 @@
-"""AI Layer — Claude API integration for signal evaluation and sentiment analysis."""
+"""AI Layer — Claude API + TradingAgents integration for signal evaluation."""
 
 from src.ai_layer.claude_client import ClaudeClient, AIDecision, SentimentDecision
 from src.ai_layer.composite_scorer import CompositeScorer, CompositeScore
 from src.ai_layer.decision_logger import AIDecisionLogger
+from src.ai_layer.trading_agents import TradingAgentsDecisionClient
 
 __all__ = [
     "ClaudeClient",
@@ -11,4 +12,5 @@ __all__ = [
     "CompositeScorer",
     "CompositeScore",
     "AIDecisionLogger",
+    "TradingAgentsDecisionClient",
 ]

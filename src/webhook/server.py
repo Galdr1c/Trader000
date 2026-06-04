@@ -6,6 +6,7 @@ Routes an incoming alert through the full pipeline:
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import logging
@@ -161,6 +162,33 @@ async def alerts() -> JSONResponse:
     return JSONResponse(content=list(_alert_history))
 
 
+async def feed() -> JSONResponse:
+    """Live feed: news + sentiment + social media for dashboard.
+
+    Gracefully handles partial failures — if one data source fails,
+    others still return. Dashboard never sees a 500.
+    """
+    from src.sentiment.fear_greed import fetch_fear_greed
+    from src.sentiment.news import fetch_crypto_news
+    from src.sentiment.social import get_social_health
+
+    fg_result, news_result = await asyncio.gather(
+        fetch_fear_greed(),
+        fetch_crypto_news(coin="BTC", hours=6),
+        return_exceptions=True,
+    )
+
+    fg = fg_result if isinstance(fg_result, int) else 50
+    news = news_result if isinstance(news_result, list) else []
+
+    return JSONResponse(content={
+        "fear_greed": fg,
+        "news": news[:15],
+        "social_tools": get_social_health(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    })
+
+
 async def dashboard() -> PlainTextResponse:
     """Live monitoring dashboard — open in browser."""
     return PlainTextResponse(content=DASHBOARD_HTML, media_type="text/html")
@@ -174,6 +202,7 @@ def create_app(lifespan=None) -> FastAPI:
     _app.add_api_route("/health", health, methods=["GET"])
     _app.add_api_route("/status", status, methods=["GET"])
     _app.add_api_route("/api/alerts", alerts, methods=["GET"])
+    _app.add_api_route("/api/feed", feed, methods=["GET"])
     _app.add_api_route("/metrics", metrics, methods=["GET"])
     return _app
 

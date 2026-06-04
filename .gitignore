@@ -12,10 +12,13 @@ dist/
 build/
 *.whl
 *.spec
+Lib/
+Lib/site-packages/
 
 # --- Virtual environments ---
 .venv/
 venv/
+venv312/
 env/
 ENV/
 
@@ -57,3 +60,4 @@ htmlcov/
 
 # --- Analysis reports ---
 svtr_ai_trading_bot_analysis.html
+trading_bot_github_repos.html

@@ -63,6 +63,8 @@ async def lifespan(app: FastAPI):
             logger.error("exchange_init_error | %s", e)
 
     # ── Initialize AI ────────────────────────────────────────────
+    # ── Initialize AI & TradingAgents ────────────────────────────
+    ta_client = None
     if settings.ai_enabled and settings.anthropic_api_key:
         try:
             from src.ai_layer.claude_client import ClaudeClient
@@ -72,6 +74,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error("ai_init_error | %s", e)
 
+    if settings.anthropic_api_key:
+        try:
+            from src.ai_layer.trading_agents import TradingAgentsDecisionClient
+
+            ta_client = TradingAgentsDecisionClient(
+                anthropic_api_key=settings.anthropic_api_key,
+                deep_think_model=settings.anthropic_model,
+                quick_think_model=settings.anthropic_model,
+            )
+            logger.info("trading_agents_initialized | model=%s", settings.anthropic_model)
+        except Exception as e:
+            logger.error("trading_agents_init_error | %s", e)
+
     # ── Create Decision Engine ───────────────────────────────────
     engine = DecisionEngine(
         risk_manager=risk_manager,
@@ -79,6 +94,7 @@ async def lifespan(app: FastAPI):
         ai_client=ai_client,
         exchange_client=exchange_client,
         telegram=telegram,
+        trading_agents_client=ta_client,
     )
     set_engine(engine)
     set_clients(exchange_client=exchange_client, ai_client=ai_client)
