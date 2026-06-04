@@ -89,5 +89,6 @@ class WebhookResponse(BaseModel):
 
     status: str = "ok"
     message: str = ""
+    symbol: str = ""
     signal_score: float = 0.0
     action_taken: str = "none"

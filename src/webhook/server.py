@@ -35,7 +35,7 @@ def _verify_signature(body: bytes, signature: str) -> bool:
     """Verify HMAC signature from TradingView (optional security layer)."""
     if not settings.webhook_secret:
         return True
-    expected = hmac.new(
+    expected = hmac.HMAC(
         settings.webhook_secret.encode(), body, hashlib.sha256
     ).hexdigest()
     return hmac.compare_digest(expected, signature)
@@ -74,13 +74,19 @@ async def handle_webhook(
 
     if _engine is None:
         logger.warning("decision_engine_not_initialized — alert ignored")
-        return WebhookResponse(status="ignored", message="Engine not ready")
+        return WebhookResponse(
+            status="ignored",
+            message="Engine not ready",
+            symbol=payload.symbol,
+            signal_score=payload.signal_score,
+        )
 
     result = await _engine.evaluate_alert(payload)
 
     return WebhookResponse(
         status="ok",
         message=result.get("reason", ""),
+        symbol=payload.symbol,
         signal_score=payload.signal_score,
         action_taken=result.get("action", "none"),
     )

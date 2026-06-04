@@ -51,8 +51,9 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 
-# --- Pine Script (optional — uncomment if you don't want to track .pine) ---
+# --- Pine Script ---
+*.bak
 *.pine
 
-# --- Analysis reports (generated, track if desired) ---
+# --- Analysis reports ---
 svtr_ai_trading_bot_analysis.html
