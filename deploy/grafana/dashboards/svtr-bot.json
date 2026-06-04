@@ -1,0 +1,92 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "title": "Bot Status",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "svtr_uptime_seconds", "legendFormat": "Uptime" }],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": { "steps": [{ "color": "green", "value": 0 }] }
+        }
+      }
+    },
+    {
+      "title": "Total Alerts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "svtr_alerts_total", "legendFormat": "Alerts" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
+    },
+    {
+      "title": "Exchange Connected",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "svtr_exchange_connected", "legendFormat": "Connected" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DISCONNECTED", "color": "red" }, "1": { "text": "CONNECTED", "color": "green" } } }],
+          "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }
+        }
+      }
+    },
+    {
+      "title": "AI Enabled",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "svtr_ai_enabled", "legendFormat": "AI" }],
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [{ "type": "value", "options": { "0": { "text": "OFF", "color": "red" }, "1": { "text": "ON", "color": "green" } } }]
+        }
+      }
+    },
+    {
+      "title": "Social Tools Availability",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "svtr_social_tool_available{tool=\"twitter_cli\"}", "legendFormat": "Twitter CLI" },
+        { "expr": "svtr_social_tool_available{tool=\"rdt_cli\"}", "legendFormat": "Reddit CLI" },
+        { "expr": "svtr_social_tool_available{tool=\"yt_dlp\"}", "legendFormat": "yt-dlp" }
+      ]
+    },
+    {
+      "title": "Uptime Over Time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
+      "targets": [{ "expr": "svtr_uptime_seconds", "legendFormat": "Uptime (s)" }],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Alerts Processed (Rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
+      "targets": [{ "expr": "rate(svtr_alerts_total[5m])", "legendFormat": "Alerts/sec" }],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "SVTR Bot Architecture",
+      "type": "text",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 12 },
+      "options": {
+        "content": "## SVTR Bot Production Stack\n\n**Services:** svtr-bot (FastAPI) | Redis (state) | Prometheus (metrics) | Grafana (dashboard)\n\n**Endpoints:** `/webhook` (TradingView alerts) | `/health` (liveness) | `/status` (dashboard) | `/metrics` (Prometheus)\n\n**TradingView → Bot → Claude AI → Exchange → Telegram notifications**"
+      }
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["trading", "svtr", "bot"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "SVTR Bot Dashboard",
+  "uid": "svtr-bot-main",
+  "version": 1,
+  "weekStart": ""
+}
