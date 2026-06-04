@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     webhook_port: int = 8000
     webhook_secret: str = ""
 
+    # ── MCP Scanner ────────────────────────────────────────────────
+    scan_interval_seconds: int = 300
+    mcp_cache_ttl: float = 60.0
+
     # ── Strategy ──────────────────────────────────────────────────
     min_signal_score: float = 8.0
     position_size_pct: float = 20.0
