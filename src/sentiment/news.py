@@ -3,16 +3,17 @@
 Fetches from:
 1. RSS feeds (Cointelegraph, Decrypt, The Block) — free, no key needed
 2. CryptoPanic API — free tier (1 req/sec), optional API key for higher limits
+
+RSS items now include keyword-based sentiment labels (bullish/bearish/neutral).
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
-
-import asyncio
-import re
 
 import feedparser
 import httpx
@@ -21,25 +22,89 @@ from src.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ── Keyword-based sentiment for RSS/news items ─────────────────────
+
+_POSITIVE_KEYWORDS = frozenset([
+    "surge", "rally", "bull", "bullish", "moon", "pump", "gain", "profit",
+    "breakout", "record", "high", "adoption", "approval", "etf",
+    "partnership", "upgrade", "milestone", "accumulation", "institutional",
+    "green", "up", "recovery", "boom", "launch", "soar", "jump",
+    "positive", "optimistic", "growth", "opportunity", "all-time high",
+    "mainnet", "halving", "inflow", "buy", "long",
+])
+
+_NEGATIVE_KEYWORDS = frozenset([
+    "crash", "dump", "bear", "bearish", "hack", "exploit", "scam",
+    "ban", "regulation", "lawsuit", "sec", "fraud", "collapse",
+    "decline", "loss", "plunge", "sell-off", "liquidation", "bankrupt",
+    "warning", "risk", "down", "red", "fear", "panic", "recession",
+    "inflation", "fud", "outflow", "delay", "cancel", "drop", "fall",
+    "negative", "pessimistic", "danger", "crisis", "bubble",
+])
+
+
+def _detect_sentiment(text: str) -> str:
+    """Detect bullish/bearish/neutral sentiment from text using keywords."""
+    if not text:
+        return "neutral"
+    lower = text.lower()
+    pos_count = sum(1 for kw in _POSITIVE_KEYWORDS if kw in lower)
+    neg_count = sum(1 for kw in _NEGATIVE_KEYWORDS if kw in lower)
+    if pos_count > neg_count and pos_count >= 2:
+        return "bullish"
+    if neg_count > pos_count and neg_count >= 2:
+        return "bearish"
+    if pos_count > neg_count:
+        return "bullish"
+    if neg_count > pos_count:
+        return "bearish"
+    return "neutral"
+
+
+def _matches_coin(title: str, coin: str) -> bool:
+    """Check if a news title matches a coin symbol or name.
+
+    Handles: BTC, Bitcoin, bitcoin, ETH, Ethereum, ethereum, etc.
+    """
+    t = title.lower()
+    coin_upper = coin.upper()
+    coin_lower = coin.lower()
+
+    # Direct match: "BTC", "ETH"
+    if coin_upper in t or coin_lower in t:
+        return True
+
+    # Common coin name mappings
+    coin_names = {
+        "BTC": ["bitcoin"],
+        "ETH": ["ethereum"],
+        "SOL": ["solana"],
+        "BNB": ["bnb"],
+        "XRP": ["xrp"],
+        "ADA": ["cardano"],
+        "DOGE": ["dogecoin", "doge"],
+        "DOT": ["polkadot"],
+        "AVAX": ["avalanche"],
+        "MATIC": ["polygon"],
+    }
+    names = coin_names.get(coin_upper, [coin_lower])
+    return any(name in t for name in names)
+
 
 async def _fetch_cryptopanic(
     coin: str = "BTC",
     hours: int = 4,
 ) -> list[dict[str, Any]]:
-    """Fetch recent news from CryptoPanic API.
-
-    Free tier: 1 request/second, no API key required.
-    With API key: higher rate limits and more results.
-    """
+    """Fetch recent news from CryptoPanic API."""
     if not settings.cryptopanic_api_key:
         logger.debug("cryptopanic_no_key | skipping CryptoPanic API")
         return []
 
     params: dict[str, Any] = {
         "currencies": coin.upper(),
-        "filter": "hot",  # hot | important | bullish | bearish | noteworthy | lol
-        "kind": "news",  # news | analysis | media
-        "regions": "en",  # en | global
+        "filter": "hot",
+        "kind": "news",
+        "regions": "en",
     }
     if settings.cryptopanic_api_key:
         params["auth_token"] = settings.cryptopanic_api_key
@@ -65,28 +130,23 @@ async def _fetch_cryptopanic(
                 if published < cutoff:
                     continue
 
-                # CryptoPanic sentiment labels
                 votes = item.get("votes", {})
                 sentiment_label = _classify_cryptopanic_sentiment(votes)
-
                 title = item.get("title", "")
-                source_url = ""
 
                 news_item: dict[str, Any] = {
                     "title": title,
-                    "summary": f"[{sentiment_label}] {item.get('source', {}).get('title', 'CryptoPanic')}",
+                    "summary": item.get("source", {}).get("title", "CryptoPanic"),
                     "published": published.isoformat(),
                     "source": "cryptopanic",
-                    "url": source_url,
+                    "url": "",
                     "sentiment_label": sentiment_label,
                 }
-                # Include currencies if present
                 currencies = item.get("currencies", [])
                 if currencies:
                     news_item["coins"] = [
                         c.get("code", "") for c in currencies if isinstance(c, dict)
                     ]
-
                 results.append(news_item)
 
     except httpx.TimeoutException:
@@ -100,26 +160,20 @@ async def _fetch_cryptopanic(
 
 
 def _classify_cryptopanic_sentiment(votes: dict) -> str:
-    """Classify CryptoPanic votes into a sentiment label.
-
-    votes example: {"liked": 5, "disliked": 1, "important": 2, "lol": 0, "rocket": 3}
-    """
+    """Classify CryptoPanic votes into a sentiment label."""
     if not isinstance(votes, dict):
         return "neutral"
-
     liked = votes.get("liked", 0)
     disliked = votes.get("disliked", 0)
     important = votes.get("important", 0)
     rocket = votes.get("rocket", 0)
-
     positive = liked + rocket + important
     negative = disliked
-
     if positive > negative * 2:
         return "bullish"
-    elif negative > positive * 2:
+    if negative > positive * 2:
         return "bearish"
-    elif important >= 2:
+    if important >= 2:
         return "important"
     return "neutral"
 
@@ -128,34 +182,42 @@ async def _fetch_rss_feeds(
     coin: str = "BTC",
     hours: int = 4,
 ) -> list[dict[str, Any]]:
-    """Fetch from configured RSS feeds.
-
-    Returns list of news items matching the coin symbol.
-    """
+    """Fetch from configured RSS feeds with sentiment detection."""
     news: list[dict[str, Any]] = []
+    now = datetime.now(timezone.utc)
 
     for feed_url in settings.rss_feeds:
         try:
-            # feedparser is sync — run in thread to avoid blocking
             loop = asyncio.get_running_loop()
             feed = await loop.run_in_executor(None, feedparser.parse, feed_url)
 
-            for entry in feed.entries[:20]:
+            for entry in feed.entries[:30]:
                 title = getattr(entry, "title", "")
-                # Match coin symbol in title (case-insensitive)
-                if (
-                    coin.upper() not in title.upper()
-                    and coin.lower() not in title.lower()
-                ):
+                if not title:
+                    continue
+
+                # Broader coin matching
+                if not _matches_coin(title, coin):
                     continue
 
                 summary = getattr(entry, "summary", "")
-                # Strip HTML tags (basic)
                 if "<" in summary:
                     summary = re.sub(r"<[^>]+>", "", summary)
                 summary = summary[:300]
 
-                published = getattr(entry, "published", "")
+                # Parse published date into ISO format
+                published_str = getattr(entry, "published", "") or getattr(entry, "updated", "")
+                published = now.isoformat()
+                if published_str:
+                    try:
+                        parsed = feedparser._parse_date(published_str)
+                        if parsed:
+                            published = datetime(*parsed[:6], tzinfo=timezone.utc).isoformat()
+                    except Exception:
+                        published = now.isoformat()
+
+                # Add sentiment label via keyword detection
+                sentiment_label = _detect_sentiment(title + " " + summary)
 
                 news.append({
                     "title": title,
@@ -163,6 +225,7 @@ async def _fetch_rss_feeds(
                     "published": published,
                     "source": "rss",
                     "url": getattr(entry, "link", ""),
+                    "sentiment_label": sentiment_label,
                 })
         except Exception as e:
             logger.warning("rss_fetch_error | %s | %s", feed_url, e)
@@ -177,24 +240,20 @@ async def fetch_crypto_news(
     """Fetch recent crypto news from all sources.
 
     Combines CryptoPanic API + RSS feeds, deduplicates by title,
-    and returns the most recent items capped at 20.
-
-    Returns a list of dicts with keys: title, summary, published, source, url.
+    adds sentiment labels, and returns the most recent items capped at 20.
     """
-    # Fetch from both sources in parallel
     cp_task = _fetch_cryptopanic(coin=coin, hours=hours)
     rss_task = _fetch_rss_feeds(coin=coin, hours=hours)
 
     cp_news, rss_news = await asyncio.gather(cp_task, rss_task)
 
-    # Combine and deduplicate by title similarity
     all_news: list[dict[str, Any]] = cp_news + rss_news
 
-    # Deduplicate (simple: exact title match)
+    # Deduplicate by exact title match
     seen_titles: set[str] = set()
     unique_news: list[dict[str, Any]] = []
     for item in all_news:
-        title_key = item["title"].lower().strip()
+        title_key = item.get("title", "").lower().strip()
         if title_key and title_key not in seen_titles:
             seen_titles.add(title_key)
             unique_news.append(item)
