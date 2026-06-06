@@ -1,92 +1,449 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "SVTR Bot — trading bot overview with position, P&L, AI decisions, and system health",
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 1,
+  "graphTooltip": 0,
   "id": null,
   "links": [],
+  "liveNow": false,
   "panels": [
     {
-      "title": "Bot Status",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
-      "targets": [{ "expr": "svtr_uptime_seconds", "legendFormat": "Uptime" }],
+      "datasource": "Prometheus",
+      "description": "Number of trades opened (cumulative)",
       "fieldConfig": {
         "defaults": {
-          "unit": "s",
-          "thresholds": { "steps": [{ "color": "green", "value": 0 }] }
+          "color": {"mode": "thresholds"},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          },
+          "unit": "short"
         }
-      }
-    },
-    {
-      "title": "Total Alerts",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
-      "targets": [{ "expr": "svtr_alerts_total", "legendFormat": "Alerts" }],
-      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "blue", "value": 0 }] } } }
-    },
-    {
-      "title": "Exchange Connected",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
-      "targets": [{ "expr": "svtr_exchange_connected", "legendFormat": "Connected" }],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [{ "type": "value", "options": { "0": { "text": "DISCONNECTED", "color": "red" }, "1": { "text": "CONNECTED", "color": "green" } } }],
-          "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] }
-        }
-      }
-    },
-    {
-      "title": "AI Enabled",
-      "type": "stat",
-      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
-      "targets": [{ "expr": "svtr_ai_enabled", "legendFormat": "AI" }],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [{ "type": "value", "options": { "0": { "text": "OFF", "color": "red" }, "1": { "text": "ON", "color": "green" } } }]
-        }
-      }
-    },
-    {
-      "title": "Social Tools Availability",
-      "type": "piechart",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 4 },
-      "targets": [
-        { "expr": "svtr_social_tool_available{tool=\"twitter_cli\"}", "legendFormat": "Twitter CLI" },
-        { "expr": "svtr_social_tool_available{tool=\"rdt_cli\"}", "legendFormat": "Reddit CLI" },
-        { "expr": "svtr_social_tool_available{tool=\"yt_dlp\"}", "legendFormat": "yt-dlp" }
-      ]
-    },
-    {
-      "title": "Uptime Over Time",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 4 },
-      "targets": [{ "expr": "svtr_uptime_seconds", "legendFormat": "Uptime (s)" }],
-      "fieldConfig": { "defaults": { "unit": "s" } }
-    },
-    {
-      "title": "Alerts Processed (Rate)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 4 },
-      "targets": [{ "expr": "rate(svtr_alerts_total[5m])", "legendFormat": "Alerts/sec" }],
-      "fieldConfig": { "defaults": { "unit": "ops" } }
-    },
-    {
-      "title": "SVTR Bot Architecture",
-      "type": "text",
-      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 12 },
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "id": 1,
       "options": {
-        "content": "## SVTR Bot Production Stack\n\n**Services:** svtr-bot (FastAPI) | Redis (state) | Prometheus (metrics) | Grafana (dashboard)\n\n**Endpoints:** `/webhook` (TradingView alerts) | `/health` (liveness) | `/status` (dashboard) | `/metrics` (Prometheus)\n\n**TradingView → Bot → Claude AI → Exchange → Telegram notifications**"
-      }
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_trades_total",
+          "legendFormat": "Total Trades",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Trades",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Current daily P&L as percentage of initial equity",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "yellow", "value": -2},
+              {"color": "green", "value": 0}
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_daily_pnl_pct",
+          "legendFormat": "Daily P&L",
+          "refId": "A"
+        }
+      ],
+      "title": "Daily P&L %",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "1 = position open, 0 = flat",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"options": {"0": {"text": "FLAT", "color": "gray"}, "1": {"text": "OPEN", "color": "green"}}, "type": "value"}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "gray", "value": null}
+            ]
+          }
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_position_open",
+          "legendFormat": "Position",
+          "refId": "A"
+        }
+      ],
+      "title": "Position State",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Number of consecutive stop losses (triggers cooldown at threshold)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 2},
+              {"color": "red", "value": 3}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 0},
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto"
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_consecutive_stops",
+          "legendFormat": "Consecutive Stops",
+          "refId": "A"
+        }
+      ],
+      "title": "Consecutive Stops",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Cumulative net profit in quote currency (e.g., USDT)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green", "value": null}]
+          },
+          "unit": "currencyUSD"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 16, "y": 0},
+      "id": 5,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_net_profit",
+          "legendFormat": "Net Profit",
+          "refId": "A"
+        }
+      ],
+      "title": "Net Profit Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Distribution of exit types — TP, stop loss, trailing, VWAP exit, etc.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false}
+          },
+          "mappings": []
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 4},
+      "id": 6,
+      "options": {
+        "legend": {"displayMode": "list", "placement": "right", "showLegend": true},
+        "pieType": "donut",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_exits_total",
+          "legendFormat": "{{exit_type}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Exit Type Distribution",
+      "type": "piechart"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Histogram of entry signal scores (0-13.5 scale)",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "scaleDistribution": {"type": "linear"}
+          },
+          "mappings": []
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 4},
+      "id": 7,
+      "options": {
+        "calculate": false,
+        "cellGap": 1,
+        "color": {"exponent": 0.5, "fill": "dark-orange", "mode": "scheme", "scale": "exponential", "scheme": "Oranges", "steps": 64},
+        "exemplars": {"color": "rgba(255,0,255,0.7)"},
+        "filterValues": {"le": 1e-9},
+        "legend": {"show": true},
+        "rowsFrame": {"layout": "auto"},
+        "tooltip": {"show": true, "yHistogram": false},
+        "yAxis": {"axisPlacement": "left", "reverse": false}
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "svtr_signal_score_bucket",
+          "format": "heatmap",
+          "legendFormat": "{{le}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Entry Signal Score Distribution",
+      "type": "heatmap"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "P95 latency for external API calls",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "line+area"}
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1000},
+              {"color": "red", "value": 3000}
+            ]
+          },
+          "unit": "ms"
+        }
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "id": 8,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "histogram_quantile(0.95, sum by (le, service) (rate(svtr_api_latency_ms_bucket[5m])))",
+          "legendFormat": "{{service}}",
+          "refId": "A"
+        }
+      ],
+      "title": "API Latency (P95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Bot process memory and CPU usage",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {"legend": false, "tooltip": false, "viz": false},
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {"type": "linear"},
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {"group": "A", "mode": "none"},
+            "thresholdsStyle": {"mode": "off"}
+          },
+          "mappings": [],
+          "unit": "decmbytes"
+        }
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 12, "y": 12},
+      "id": 9,
+      "options": {
+        "legend": {"calcs": [], "displayMode": "list", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "single", "sort": "none"}
+      },
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "process_resident_memory_bytes",
+          "legendFormat": "Memory",
+          "refId": "A"
+        }
+      ],
+      "title": "Memory Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Recent error log count by severity",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {"align": "auto", "cellOptions": {"type": "auto"}, "inspect": false},
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 10}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 20},
+      "id": 10,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false},
+        "showHeader": true
+      },
+      "pluginVersion": "10.4.0",
+      "targets": [
+        {
+          "datasource": "Prometheus",
+          "expr": "increase(svtr_log_events_total{level=~\"error|warning\"}[1h])",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "{{level}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Errors & Warnings (1h)",
+      "type": "table"
     }
   ],
-  "schemaVersion": 39,
-  "tags": ["trading", "svtr", "bot"],
-  "templating": { "list": [] },
-  "time": { "from": "now-6h", "to": "now" },
-  "title": "SVTR Bot Dashboard",
-  "uid": "svtr-bot-main",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["svtr", "trading", "crypto"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "SVTR Bot — Trading Overview",
+  "uid": "svtr-bot-overview",
   "version": 1,
   "weekStart": ""
 }
