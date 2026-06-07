@@ -11,6 +11,7 @@ import hashlib
 import hmac
 import logging
 from collections import deque
+from dataclasses import asdict
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
 
@@ -25,6 +26,8 @@ from src.webhook.models import TVAlertPayload, WebhookResponse
 
 if TYPE_CHECKING:
     from src.decision.engine import DecisionEngine
+    from src.decision.position import PositionManager
+    from src.scanner.scanner import SignalScanner
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +35,8 @@ logger = logging.getLogger(__name__)
 _engine: "DecisionEngine | None" = None
 _exchange_client: Any = None
 _ai_client: Any = None
+_scanner: "SignalScanner | None" = None
+_position_manager: "PositionManager | None" = None
 # Recent alerts ring buffer for dashboard
 _alert_history: deque[dict] = deque(maxlen=50)
 
@@ -47,6 +52,16 @@ def set_clients(exchange_client: Any = None, ai_client: Any = None) -> None:
     global _exchange_client, _ai_client  # noqa: PLW0603
     _exchange_client = exchange_client
     _ai_client = ai_client
+
+
+def set_runtime_state(
+    scanner: "SignalScanner | None",
+    position_manager: "PositionManager | None",
+) -> None:
+    """Inject scanner and position state used by dashboard endpoints."""
+    global _scanner, _position_manager  # noqa: PLW0603
+    _scanner = scanner
+    _position_manager = position_manager
 
 
 def _add_alert(
@@ -162,6 +177,90 @@ async def alerts() -> JSONResponse:
     return JSONResponse(content=list(_alert_history))
 
 
+async def scanner_status() -> JSONResponse:
+    """Return scanner state and recent results."""
+    if _scanner is None:
+        return JSONResponse(content={"running": False, "symbols": [], "results": []})
+    return JSONResponse(content={
+        "running": _scanner.is_running(),
+        "symbols": _scanner.symbols,
+        "interval_seconds": _scanner.interval_seconds,
+        "results": [asdict(result) for result in _scanner.scan_history],
+    })
+
+
+def _latest_prices() -> dict[str, float]:
+    prices: dict[str, float] = {}
+    if _scanner is None:
+        return prices
+    for result in _scanner.scan_history:
+        if result.price > 0:
+            prices[result.symbol] = result.price
+    return prices
+
+
+async def positions() -> JSONResponse:
+    """Return active positions and aggregate P&L."""
+    if _position_manager is None:
+        return JSONResponse(content={
+            "positions": [],
+            "summary": {
+                "active_count": 0,
+                "realized_value": 0,
+                "unrealized_value": 0,
+                "total_value": 0,
+            },
+        })
+
+    prices = _latest_prices()
+    items = []
+    for position in _position_manager.active_positions:
+        current_price = prices.get(position.symbol)
+        unrealized = None
+        pnl_pct = None
+        if current_price is not None:
+            pnl_pct = position.current_pnl_pct(current_price)
+            unrealized = position.entry_price * position.quantity * pnl_pct / 100
+        items.append({
+            "symbol": position.symbol,
+            "side": position.side,
+            "entry_price": position.entry_price,
+            "current_price": current_price,
+            "quantity": position.quantity,
+            "entry_score": position.entry_score,
+            "unrealized_pnl_pct": pnl_pct,
+            "unrealized_pnl": unrealized,
+        })
+
+    return JSONResponse(content={
+        "positions": items,
+        "summary": _position_manager.get_pnl_summary(prices),
+    })
+
+
+async def performance() -> JSONResponse:
+    """Return realized trades and cumulative P&L series."""
+    trades = []
+    series = [{"index": 0, "pnl": 0.0}]
+    cumulative = 0.0
+    if _position_manager is not None:
+        for index, position in enumerate(_position_manager.realized_history, start=1):
+            pnl_value = position.entry_price * position.initial_qty * position.pnl_pct / 100
+            cumulative += pnl_value
+            trades.append({
+                "symbol": position.symbol,
+                "side": position.side,
+                "entry_price": position.entry_price,
+                "exit_price": position.exit_price,
+                "quantity": position.initial_qty,
+                "pnl_pct": position.pnl_pct,
+                "pnl": pnl_value,
+                "exit_type": position.exit_type.value if position.exit_type else None,
+            })
+            series.append({"index": index, "pnl": cumulative})
+    return JSONResponse(content={"trades": trades, "series": series})
+
+
 async def feed() -> JSONResponse:
     """Live feed: news + sentiment + social media for dashboard.
 
@@ -202,6 +301,9 @@ def create_app(lifespan=None) -> FastAPI:
     _app.add_api_route("/health", health, methods=["GET"])
     _app.add_api_route("/status", status, methods=["GET"])
     _app.add_api_route("/api/alerts", alerts, methods=["GET"])
+    _app.add_api_route("/api/scanner", scanner_status, methods=["GET"])
+    _app.add_api_route("/api/positions", positions, methods=["GET"])
+    _app.add_api_route("/api/performance", performance, methods=["GET"])
     _app.add_api_route("/api/feed", feed, methods=["GET"])
     _app.add_api_route("/metrics", metrics, methods=["GET"])
     return _app

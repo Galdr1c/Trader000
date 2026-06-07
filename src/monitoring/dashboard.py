@@ -181,6 +181,38 @@ body { font-family: 'Inter', -apple-system, system-ui, sans-serif; background: v
   </div>
 </div>
 
+<!-- Portfolio -->
+<div class="section-title">Portfolio</div>
+<div class="grid">
+  <div class="card">
+    <div class="card-title">Open Positions</div>
+    <div class="big-number" id="openPositionCount">0</div>
+    <div class="big-label">active symbols</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Unrealized P&amp;L</div>
+    <div class="big-number" id="unrealizedPnl">0.00</div>
+    <div class="big-label">current scanner prices</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Realized P&amp;L</div>
+    <div class="big-number" id="realizedPnl">0.00</div>
+    <div class="big-label">closed positions</div>
+  </div>
+</div>
+<div class="grid" style="grid-template-columns:2fr 1fr">
+  <div class="card" style="overflow-x:auto">
+    <table class="alert-table">
+      <thead><tr><th>Symbol</th><th>Side</th><th>Entry</th><th>Current</th><th>Qty</th><th>P&amp;L</th></tr></thead>
+      <tbody id="positionBody"><tr><td colspan="6" style="text-align:center;color:var(--text2)">No open positions</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <div class="card-title">Cumulative Realized P&amp;L</div>
+    <canvas id="pnlChart" width="420" height="180" style="width:100%;height:180px"></canvas>
+  </div>
+</div>
+
 <!-- News Feed -->
 <div class="section-title">News Feed <span id="newsCount" class="badge badge-gray">0</span></div>
 <div class="grid" style="grid-template-columns:1fr">
@@ -260,6 +292,80 @@ async function fetchAlerts() {
   } catch(e) {}
 }
 
+async function fetchPortfolio() {
+  try {
+    const [positionsResponse, performanceResponse] = await Promise.all([
+      fetch('/api/positions'),
+      fetch('/api/performance')
+    ]);
+    const positionsData = await positionsResponse.json();
+    const performanceData = await performanceResponse.json();
+    const summary = positionsData.summary || {};
+    document.getElementById('openPositionCount').textContent = summary.active_count || 0;
+    setPnlValue('unrealizedPnl', summary.unrealized_value || 0);
+    setPnlValue('realizedPnl', summary.realized_value || 0);
+
+    const body = document.getElementById('positionBody');
+    body.replaceChildren();
+    const positions = positionsData.positions || [];
+    if (positions.length === 0) {
+      const row = body.insertRow();
+      const cell = row.insertCell();
+      cell.colSpan = 6;
+      cell.style.textAlign = 'center';
+      cell.style.color = 'var(--text2)';
+      cell.textContent = 'No open positions';
+    } else {
+      positions.forEach(position => {
+        const row = body.insertRow();
+        const values = [
+          position.symbol,
+          position.side,
+          fmtNumber(position.entry_price),
+          position.current_price == null ? 'unavailable' : fmtNumber(position.current_price),
+          fmtNumber(position.quantity),
+          position.unrealized_pnl == null ? 'unavailable' : fmtNumber(position.unrealized_pnl)
+        ];
+        values.forEach(value => {
+          const cell = row.insertCell();
+          cell.textContent = value;
+        });
+      });
+    }
+    drawPnlChart(performanceData.series || []);
+  } catch(e) {}
+}
+
+function fmtNumber(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function setPnlValue(id, value) {
+  const element = document.getElementById(id);
+  element.textContent = fmtNumber(value);
+  element.style.color = value > 0 ? 'var(--green)' : value < 0 ? 'var(--red)' : 'var(--text)';
+}
+
+function drawPnlChart(series) {
+  const canvas = document.getElementById('pnlChart');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (series.length < 2) return;
+  const values = series.map(point => Number(point.pnl || 0));
+  const min = Math.min(...values, 0);
+  const max = Math.max(...values, 0);
+  const span = Math.max(1, max - min);
+  ctx.strokeStyle = values[values.length - 1] >= 0 ? '#22c55e' : '#ef4444';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  values.forEach((value, index) => {
+    const x = 10 + index * (canvas.width - 20) / Math.max(1, values.length - 1);
+    const y = canvas.height - 10 - (value - min) * (canvas.height - 20) / span;
+    if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
 async function fetchFeed() {
   try {
     const r = await fetch('/api/feed');
@@ -330,7 +436,7 @@ function copyWebhookUrl() {
 async function refresh() {
   const bar = document.getElementById('refreshBar');
   bar.style.width = '100%';
-  await Promise.all([fetchStatus(), fetchAlerts(), fetchFeed(), fetchMetrics()]);
+  await Promise.all([fetchStatus(), fetchAlerts(), fetchPortfolio(), fetchFeed(), fetchMetrics()]);
   setTimeout(() => { bar.style.width = '0%'; }, 300);
 }
 

@@ -23,7 +23,7 @@ from src.monitoring.logger import setup_logging
 from src.decision.engine import DecisionEngine
 from src.decision.risk import RiskManager
 from src.decision.position import PositionManager
-from src.webhook.server import create_app, set_engine, set_clients
+from src.webhook.server import create_app, set_engine, set_clients, set_runtime_state
 from src.monitoring.telegram import TelegramNotifier
 from src.mcp_provider.client import MCPClient
 from src.scanner.scanner import SignalScanner
@@ -109,6 +109,7 @@ async def lifespan(app: FastAPI):
         max_concurrency=settings.max_concurrent_scans,
     )
     await scanner.start()
+    set_runtime_state(scanner=scanner, position_manager=position_manager)
     logger.info(
         "scanner_started | interval=%ds | symbols=%s",
         scan_interval,
