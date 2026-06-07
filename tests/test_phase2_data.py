@@ -164,10 +164,9 @@ class TestMarketData:
         """Market context aggregates all data sources."""
         from src.sentiment.market_data import fetch_market_context
 
-        mock_exchange = AsyncMock()
+        mock_exchange = MagicMock()
         mock_exchange.get_funding_rate = AsyncMock(return_value=0.001)
-        mock_exchange.exchange = MagicMock()
-        mock_exchange.exchange.fetch_open_interest = AsyncMock(
+        mock_exchange.get_open_interest = AsyncMock(
             return_value={"openInterestAmount": 50000, "baseVolume": "BTC", "quoteVolume": "USDT"}
         )
         mock_exchange.get_ohlcv = AsyncMock(

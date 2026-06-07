@@ -1,16 +1,9 @@
 """End-to-end webhook test — simulates TradingView alert flow."""
 
 import asyncio
-import sys
-
 from httpx import AsyncClient, ASGITransport
 
 from src.webhook.server import create_app
-
-# Force UTF-8 output on Windows
-if sys.platform == "win32":
-    import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 app = create_app()
 transport = ASGITransport(app=app)

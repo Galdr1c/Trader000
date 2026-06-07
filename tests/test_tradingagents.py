@@ -188,6 +188,8 @@ def test_tp_adjustment_calculation() -> None:
 
 def test_build_config() -> None:
     """Config builder creates correct TradingAgentsConfig."""
+    pytest.importorskip("tradingagents.config")
+
     from src.ai_layer.trading_agents import TradingAgentsDecisionClient
 
     client = TradingAgentsDecisionClient(
