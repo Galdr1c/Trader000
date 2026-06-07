@@ -105,7 +105,8 @@ async def lifespan(app: FastAPI):
         mcp_client=mcp_client,
         decision_engine=engine,
         interval_seconds=scan_interval,
-        symbols=[settings.trading_symbol.split(":")[0]],
+        symbols=settings.parsed_trading_symbols,
+        max_concurrency=settings.max_concurrent_scans,
     )
     await scanner.start()
     logger.info(

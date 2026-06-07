@@ -90,11 +90,13 @@ class SignalScanner:
         decision_engine: Any = None,  # DecisionEngine
         interval_seconds: int = 300,  # 5 min default
         symbols: list[str] | None = None,
+        max_concurrency: int = 3,
     ) -> None:
         self._mcp = mcp_client
         self._engine = decision_engine
         self._interval = interval_seconds
         self._symbols = symbols or [settings.trading_symbol.split(":")[0]]
+        self._max_concurrency = max(1, max_concurrency)
         self._task: asyncio.Task | None = None
         self._running = False
 
@@ -118,6 +120,13 @@ class SignalScanner:
     @property
     def scan_history(self) -> list[ScanResult]:
         return list(self._history)
+
+    def get_scan_history(self, symbol: str | None = None) -> list[ScanResult]:
+        """Return all recent results or only results for one symbol."""
+        history = list(self._history)
+        if symbol is None:
+            return history
+        return [result for result in history if result.symbol == symbol]
 
     def set_engine(self, engine: Any) -> None:
         """Inject decision engine (called at startup)."""
@@ -152,18 +161,7 @@ class SignalScanner:
         """Main scanning loop — runs forever until stopped."""
         while self._running:
             try:
-                for symbol in self._symbols:
-                    result = await self._scan_symbol(symbol)
-                    self._add_to_history(result)
-
-                    # Feed into decision engine if score is high enough
-                    if result.signal_score >= settings.min_signal_score and result.direction != "hold":
-                        await self._evaluate_trade(result)
-                    else:
-                        logger.info(
-                            "scan_skip | symbol=%s | score=%.1f | dir=%s | below threshold=%.1f",
-                            symbol, result.signal_score, result.direction, settings.min_signal_score,
-                        )
+                await self._run_scan_cycle()
 
             except asyncio.CancelledError:
                 break
@@ -175,11 +173,35 @@ class SignalScanner:
 
     async def scan_once(self) -> list[ScanResult]:
         """Run a single scan cycle (for manual/API triggers)."""
-        results = []
-        for symbol in self._symbols:
-            result = await self._scan_symbol(symbol)
+        return await self._run_scan_cycle()
+
+    async def _run_scan_cycle(self) -> list[ScanResult]:
+        """Scan configured symbols concurrently and process results in order."""
+        semaphore = asyncio.Semaphore(self._max_concurrency)
+
+        async def scan_guarded(symbol: str) -> ScanResult:
+            async with semaphore:
+                try:
+                    return await self._scan_symbol(symbol)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.error("scan_symbol_error | symbol=%s | err=%s", symbol, exc)
+                    return ScanResult(symbol=symbol, reason=f"scan_error: {exc}")
+
+        results = await asyncio.gather(*(scan_guarded(symbol) for symbol in self._symbols))
+        for result in results:
             self._add_to_history(result)
-            results.append(result)
+            if result.signal_score >= settings.min_signal_score and result.direction != "hold":
+                await self._evaluate_trade(result)
+            else:
+                logger.info(
+                    "scan_skip | symbol=%s | score=%.1f | dir=%s | below threshold=%.1f",
+                    result.symbol,
+                    result.signal_score,
+                    result.direction,
+                    settings.min_signal_score,
+                )
         return results
 
     async def _scan_symbol(self, symbol: str) -> ScanResult:

@@ -91,6 +91,25 @@ class RiskManager:
         adjusted_pct = base_pct * score_factor * risk_factor
         return round(max(1.0, min(25.0, adjusted_pct)), 2)
 
+    def can_open_position(
+        self,
+        active_count: int,
+        current_exposure_pct: float,
+        new_exposure_pct: float,
+        max_positions: int,
+        max_exposure_pct: float,
+    ) -> tuple[bool, str]:
+        """Check portfolio-level position count and exposure limits."""
+        if active_count >= max_positions:
+            return False, f"max_positions_reached | {active_count}/{max_positions}"
+        total_exposure = current_exposure_pct + new_exposure_pct
+        if total_exposure > max_exposure_pct:
+            return False, (
+                f"portfolio_exposure_exceeded | "
+                f"{total_exposure:.1f}% > {max_exposure_pct:.1f}%"
+            )
+        return True, "ok"
+
     def record_trade_result(self, pnl: float, was_stop: bool = False) -> None:
         """Record the result of a completed trade."""
         self.check_daily_reset()

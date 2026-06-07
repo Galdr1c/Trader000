@@ -71,6 +71,11 @@ class DecisionEngine:
             logger.warning("trade_blocked_risk | %s", risk_reason)
             return result
 
+        if self.positions.has_position_for(payload.symbol):
+            result["reason"] = f"position_already_active: {payload.symbol}"
+            logger.info("trade_rejected_duplicate_position | %s", payload.symbol)
+            return result
+
         # ── Step 2: Signal Quality ────────────────────────────────
         if payload.signal_score < settings.min_signal_score:
             result["reason"] = (
@@ -258,6 +263,22 @@ class DecisionEngine:
 
         result["position_pct"] = position_pct
         result["quantity"] = round(quantity, 6)
+
+        current_exposure_pct = sum(
+            position.entry_price * position.quantity
+            for position in self.positions.active_positions
+        ) / equity * 100
+        portfolio_allowed, portfolio_reason = self.risk.can_open_position(
+            active_count=len(self.positions.active_positions),
+            current_exposure_pct=current_exposure_pct,
+            new_exposure_pct=position_pct,
+            max_positions=settings.max_active_positions,
+            max_exposure_pct=settings.max_portfolio_exposure_pct,
+        )
+        if not portfolio_allowed:
+            result["reason"] = f"risk_blocked: {portfolio_reason}"
+            logger.warning("trade_blocked_portfolio | %s", portfolio_reason)
+            return result
 
         # ── Step 6: TP/SL Calculation ─────────────────────────────
         tp_distance = payload.tp_distance

@@ -52,14 +52,18 @@ class Settings(BaseSettings):
     # ── MCP Scanner ────────────────────────────────────────────────
     scan_interval_seconds: int = 300
     mcp_cache_ttl: float = 60.0
+    max_concurrent_scans: int = 3
 
     # ── Strategy ──────────────────────────────────────────────────
     min_signal_score: float = 8.0
     position_size_pct: float = 20.0
+    max_active_positions: int = 3
+    max_portfolio_exposure_pct: float = 80.0
     daily_max_loss_pct: float = 5.0
     consecutive_stop_limit: int = 3
     cooldown_hours: int = 24
     trading_symbol: str = "BTC/USDT:USDT"
+    trading_symbols: str = ""
     timeframe: Timeframe = Timeframe.H4
     use_dynamic_tp: bool = True
     take_profit_pct: float = 5.0
@@ -109,6 +113,17 @@ class Settings(BaseSettings):
     # ── Paths ─────────────────────────────────────────────────────
     data_dir: Path = Path("data")
     log_dir: Path = Path("logs")
+
+    @property
+    def parsed_trading_symbols(self) -> list[str]:
+        """Return normalized multi-symbol configuration."""
+        raw_symbols = self.trading_symbols.split(",") if self.trading_symbols else [self.trading_symbol]
+        symbols = [symbol.strip().upper() for symbol in raw_symbols if symbol.strip()]
+        if not symbols:
+            raise ValueError("trading symbols cannot be empty")
+        if len(symbols) != len(set(symbols)):
+            raise ValueError("duplicate trading symbols are not allowed")
+        return symbols
 
 
 settings = Settings()

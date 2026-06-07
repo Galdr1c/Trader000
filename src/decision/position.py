@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -92,7 +93,28 @@ class PositionManager:
     """Manages active position state and TP/SL lifecycle."""
 
     def __init__(self) -> None:
-        self.active: PositionState | None = None
+        self._active: dict[str, PositionState] = {}
+        self._realized: deque[PositionState] = deque(maxlen=200)
+
+    @property
+    def active(self) -> PositionState | None:
+        """Return the first active position for legacy single-symbol callers."""
+        return next(iter(self._active.values()), None)
+
+    @property
+    def active_positions(self) -> list[PositionState]:
+        return list(self._active.values())
+
+    @property
+    def realized_history(self) -> list[PositionState]:
+        return list(self._realized)
+
+    def get_position(self, symbol: str) -> PositionState | None:
+        return self._active.get(symbol)
+
+    def has_position_for(self, symbol: str) -> bool:
+        position = self.get_position(symbol)
+        return position is not None and position.is_active
 
     def open_position(
         self,
@@ -106,7 +128,10 @@ class PositionManager:
         max_loss_price: float = 0.0,
     ) -> PositionState:
         """Open a new tracked position."""
-        self.active = PositionState(
+        if self.has_position_for(symbol):
+            raise ValueError(f"position already active for {symbol}")
+
+        position = PositionState(
             symbol=symbol,
             side=side,
             entry_price=entry_price,
@@ -119,6 +144,7 @@ class PositionManager:
             stop_price=stop_price,
             max_loss_price=max_loss_price,
         )
+        self._active[symbol] = position
         logger.info(
             "position_opened | %s %s | entry=%.2f | score=%.1f | tp=%.1f%%",
             side,
@@ -127,19 +153,48 @@ class PositionManager:
             entry_score,
             dynamic_tp,
         )
-        return self.active
+        return position
 
     def close_position(
-        self, exit_type: ExitType, exit_price: float
+        self,
+        exit_type: ExitType,
+        exit_price: float,
+        symbol: str | None = None,
     ) -> PositionState | None:
         """Close the active position and return its final state."""
-        if not self.active:
+        if symbol is None:
+            position = self.active
+            symbol = position.symbol if position else None
+        else:
+            position = self.get_position(symbol)
+        if position is None or symbol is None:
             return None
-        self.active.close(exit_type, exit_price)
-        result = self.active
-        self.active = None
-        return result
+        position.close(exit_type, exit_price)
+        del self._active[symbol]
+        self._realized.append(position)
+        return position
+
+    def get_pnl_summary(self, prices: dict[str, float]) -> dict[str, float | int]:
+        """Calculate aggregate realized and unrealized P&L values."""
+        unrealized_value = 0.0
+        for symbol, position in self._active.items():
+            current_price = prices.get(symbol)
+            if current_price is None:
+                continue
+            notional = position.entry_price * position.quantity
+            unrealized_value += notional * position.current_pnl_pct(current_price) / 100
+
+        realized_value = sum(
+            position.entry_price * position.initial_qty * position.pnl_pct / 100
+            for position in self._realized
+        )
+        return {
+            "active_count": len(self._active),
+            "realized_value": realized_value,
+            "unrealized_value": unrealized_value,
+            "total_value": realized_value + unrealized_value,
+        }
 
     @property
     def has_position(self) -> bool:
-        return self.active is not None and self.active.is_active
+        return any(position.is_active for position in self._active.values())
