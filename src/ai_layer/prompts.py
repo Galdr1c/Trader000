@@ -6,10 +6,6 @@ volatility regime awareness, and structured output schemas.
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # System Prompt (applied to all Claude calls)
 # ═══════════════════════════════════════════════════════════════════════

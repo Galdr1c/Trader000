@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Bounded parallel multi-symbol scanner configured with `TRADING_SYMBOLS`
+- Symbol-keyed position tracking with portfolio exposure limits
+- Real-time scanner, position, and P&L dashboard APIs
+- Jesse 2.x strategy adapter, runner, and JSON command-line interface
+- Backtest-to-live indicator, score, TP, and stop parity tests
+- Chronological walk-forward optimization with JSON reports
+- GitHub Actions CI for pytest, Ruff, and compile checks
+
 ### Planned
-- Multi-symbol scanner (parallel trading across 5-10 pairs)
-- Web dashboard (real-time position view, P&L chart)
-- Backtesting framework integration (Jesse / freqtrade)
-- Backtest↔Live parity test suite
-- Walk-forward optimization
 - ML-based signal weight optimization
 - On-chain metrics integration (Glassnode)
 

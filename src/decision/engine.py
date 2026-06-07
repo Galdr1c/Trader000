@@ -9,16 +9,15 @@ import datetime
 import logging
 from typing import Any
 
-from src.config import settings
-from src.decision.risk import RiskManager
-from src.decision.position import PositionManager, ExitType
-from src.signal_engine.scoring import calculate_signal_strength, SignalResult, SignalWeights
-from src.signal_engine.dynamic_tp import calculate_dynamic_tp
-from src.sentiment.market_data import fetch_market_context
-from src.sentiment.sentiment_pipeline import SentimentCollector
 from src.ai_layer.composite_scorer import CompositeScorer
 from src.ai_layer.decision_logger import AIDecisionLogger
 from src.ai_layer.trading_agents import TradingAgentsDecisionClient
+from src.config import settings
+from src.decision.position import PositionManager
+from src.decision.risk import RiskManager
+from src.sentiment.market_data import fetch_market_context
+from src.sentiment.sentiment_pipeline import SentimentCollector
+from src.signal_engine.stops import calculate_stop_prices
 from src.webhook.models import TVAlertPayload
 
 logger = logging.getLogger(__name__)
@@ -286,12 +285,12 @@ class DecisionEngine:
             tp_distance += ai_decision.tp_adjustment
             tp_distance = max(settings.min_tp_distance, min(settings.max_tp_distance, tp_distance))
 
-        if payload.direction.value == "long":
-            stop_price = payload.price * (1 - settings.atr_multiplier * 0.02)
-            max_loss_price = payload.price * (1 - settings.max_loss_pct / 100)
-        else:
-            stop_price = payload.price * (1 + settings.atr_multiplier * 0.02)
-            max_loss_price = payload.price * (1 + settings.max_loss_pct / 100)
+        stop_price, max_loss_price = calculate_stop_prices(
+            price=payload.price,
+            direction=payload.direction.value,
+            atr_multiplier=settings.atr_multiplier,
+            max_loss_pct=settings.max_loss_pct,
+        )
 
         # ── Step 7: Execute ───────────────────────────────────────
         if self.exchange:

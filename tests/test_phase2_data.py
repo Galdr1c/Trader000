@@ -5,11 +5,9 @@ Covers: news aggregation, market data, sentiment pipeline, market context.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Fear & Greed
@@ -188,7 +186,7 @@ class TestSocial:
     @pytest.mark.asyncio
     async def test_twitter_sentiment_no_cli(self):
         """When twitter-cli is not installed, returns placeholder."""
-        from src.sentiment.social import get_twitter_sentiment, _tool_status
+        from src.sentiment.social import _tool_status, get_twitter_sentiment
 
         _tool_status.clear()  # Reset cache
         with patch("src.sentiment.social.shutil.which", return_value=None):
@@ -198,7 +196,7 @@ class TestSocial:
     @pytest.mark.asyncio
     async def test_reddit_sentiment_no_cli(self):
         """When rdt-cli is not installed, returns placeholder."""
-        from src.sentiment.social import get_reddit_sentiment, _tool_status
+        from src.sentiment.social import _tool_status, get_reddit_sentiment
 
         _tool_status.clear()  # Reset cache
         with patch("src.sentiment.social.shutil.which", return_value=None):

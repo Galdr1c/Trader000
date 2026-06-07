@@ -1,7 +1,9 @@
 """End-to-end webhook test — simulates TradingView alert flow."""
 
 import asyncio
-from httpx import AsyncClient, ASGITransport
+import sys
+
+from httpx import ASGITransport, AsyncClient
 
 from src.webhook.server import create_app
 

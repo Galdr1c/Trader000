@@ -114,6 +114,33 @@ async def test_scan_once_evaluates_each_eligible_symbol(monkeypatch) -> None:
     assert evaluated == ["BTCUSDT", "ETHUSDT"]
 
 
+@pytest.mark.asyncio
+async def test_trade_evaluation_failure_does_not_block_other_symbols(monkeypatch) -> None:
+    scanner = SignalScanner(
+        mcp_client=AsyncMock(),
+        symbols=["BTCUSDT", "ETHUSDT"],
+        max_concurrency=2,
+    )
+    evaluated: list[str] = []
+
+    async def fake_scan(symbol: str) -> ScanResult:
+        return ScanResult(symbol=symbol, signal_score=9.0, direction="long", price=100.0)
+
+    async def fake_evaluate(result: ScanResult) -> None:
+        evaluated.append(result.symbol)
+        if result.symbol == "BTCUSDT":
+            raise RuntimeError("engine unavailable")
+
+    monkeypatch.setattr(scanner, "_scan_symbol", fake_scan)
+    monkeypatch.setattr(scanner, "_evaluate_trade", fake_evaluate)
+
+    results = await scanner.scan_once()
+
+    assert evaluated == ["BTCUSDT", "ETHUSDT"]
+    assert results[0].action == "failed"
+    assert results[0].reason == "evaluation_error: engine unavailable"
+
+
 def test_scan_history_can_be_filtered_by_symbol() -> None:
     scanner = SignalScanner(mcp_client=AsyncMock(), symbols=["BTCUSDT", "ETHUSDT"])
     scanner._add_to_history(ScanResult(symbol="BTCUSDT"))

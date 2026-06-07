@@ -16,7 +16,7 @@ from typing import Any
 
 from src.config import settings
 from src.mcp_provider.client import MCPClient
-from src.webhook.models import TVAlertPayload, SignalDirection
+from src.webhook.models import SignalDirection, TVAlertPayload
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +193,18 @@ class SignalScanner:
         for result in results:
             self._add_to_history(result)
             if result.signal_score >= settings.min_signal_score and result.direction != "hold":
-                await self._evaluate_trade(result)
+                try:
+                    await self._evaluate_trade(result)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    logger.error(
+                        "scan_evaluation_error | symbol=%s | err=%s",
+                        result.symbol,
+                        exc,
+                    )
+                    result.action = "failed"
+                    result.reason = f"evaluation_error: {exc}"
             else:
                 logger.info(
                     "scan_skip | symbol=%s | score=%.1f | dir=%s | below threshold=%.1f",

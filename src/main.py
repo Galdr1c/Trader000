@@ -10,23 +10,21 @@ provides the dashboard, health/status endpoints, and monitoring.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import sys
 from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
 
 from src.config import settings
-from src.monitoring.logger import setup_logging
 from src.decision.engine import DecisionEngine
-from src.decision.risk import RiskManager
 from src.decision.position import PositionManager
-from src.webhook.server import create_app, set_engine, set_clients, set_runtime_state
-from src.monitoring.telegram import TelegramNotifier
+from src.decision.risk import RiskManager
 from src.mcp_provider.client import MCPClient
+from src.monitoring.logger import setup_logging
+from src.monitoring.telegram import TelegramNotifier
 from src.scanner.scanner import SignalScanner
+from src.webhook.server import create_app, set_clients, set_engine, set_runtime_state
 
 logger = logging.getLogger(__name__)
 

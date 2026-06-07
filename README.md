@@ -167,6 +167,10 @@ All configuration via environment variables (see [`.env.example`](.env.example))
 | `EXCHANGE_ID` | Exchange to trade on (binance, bybit, okx) | `binance` |
 | `EXCHANGE_TESTNET` | Use testnet (always `true` for first run) | `true` |
 | `TRADING_SYMBOL` | Pair to trade | `BTC/USDT:USDT` |
+| `TRADING_SYMBOLS` | Comma-separated pairs for parallel scanning | falls back to `TRADING_SYMBOL` |
+| `MAX_CONCURRENT_SCANS` | Maximum simultaneous market scans | `3` |
+| `MAX_ACTIVE_POSITIONS` | Portfolio position-count limit | `3` |
+| `MAX_PORTFOLIO_EXPOSURE_PCT` | Maximum aggregate nominal exposure | `80` |
 | `TIMEFRAME` | Strategy timeframe | `4h` |
 | `MIN_SIGNAL_SCORE` | Minimum composite score to enter (0–13.5) | `8.0` |
 | `POSITION_SIZE_PCT` | Position size as % of equity | `20` |
@@ -249,13 +253,15 @@ The strategy **auto-tunes** parameters based on:
 - [x] Prometheus + Grafana monitoring
 - [x] Telegram notifications
 
-### 🚧 Phase 5 (In Progress)
-- [ ] Multi-symbol scanner (parallel trading)
-- [ ] Web dashboard (real-time position view)
-- [ ] Backtesting framework integration (Jesse / freqtrade)
-- [ ] Backtest↔Live parity tests
-- [ ] CI/CD with GitHub Actions
-- [ ] Walk-forward optimization
+### ✅ Phase 5 (Completed)
+- [x] Multi-symbol scanner (bounded parallel trading)
+- [x] Web dashboard (real-time positions and P&L)
+- [x] Jesse backtesting framework integration
+- [x] Backtest↔Live parity tests
+- [x] CI with GitHub Actions
+- [x] Walk-forward optimization
+
+See [Jesse backtesting and walk-forward usage](docs/BACKTESTING.md).
 
 ### 🔮 Phase 6 (Planned)
 - [ ] ML-based signal weight optimization

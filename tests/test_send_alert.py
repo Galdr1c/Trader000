@@ -10,7 +10,9 @@ Usage:
     python tests/test_send_alert.py --all         # Run all tests
 """
 
-import argparse, json, sys, time
+import argparse
+import sys
+import time
 from datetime import datetime, timezone
 
 try:

@@ -7,11 +7,8 @@ position sizing under different risk levels, and edge cases.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
-import pytest
-
-from src.decision.risk import RiskManager, RiskState
+from src.decision.risk import RiskManager
 
 
 class TestRiskManager:

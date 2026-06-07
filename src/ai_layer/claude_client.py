@@ -14,12 +14,12 @@ from typing import Any
 
 import anthropic
 
-from src.config import settings
 from src.ai_layer.prompts import (
     SYSTEM_PROMPT,
-    build_signal_evaluation_prompt,
     build_sentiment_analysis_prompt,
+    build_signal_evaluation_prompt,
 )
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 

@@ -14,15 +14,14 @@ Usage:
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from src.config import settings
-from src.sentiment.news import fetch_crypto_news
 from src.sentiment.fear_greed import fetch_fear_greed
-from src.sentiment.social import get_twitter_sentiment, get_reddit_sentiment
+from src.sentiment.news import fetch_crypto_news
+from src.sentiment.social import get_reddit_sentiment, get_twitter_sentiment
 
 logger = logging.getLogger(__name__)
 

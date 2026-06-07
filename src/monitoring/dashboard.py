@@ -370,7 +370,7 @@ async function fetchFeed() {
   try {
     const r = await fetch('/api/feed');
     const d = await r.json();
-    
+
     // Fear & Greed gauge
     const fg = d.fear_greed || 50;
     const fgDeg = (fg / 100) * 180;

@@ -1,13 +1,12 @@
 """Tests for the Decision Engine and Risk Management."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
+from src.decision.position import ExitType, PositionManager
 from src.decision.risk import RiskManager
-from src.decision.position import PositionManager, PositionState, ExitType
-from src.decision.engine import DecisionEngine
-from src.webhook.models import TVAlertPayload, SignalDirection
+from src.webhook.models import SignalDirection, TVAlertPayload
 
 
 class TestRiskManager:

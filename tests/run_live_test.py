@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 import threading
-import urllib.request
+import time
 import urllib.error
+import urllib.request
 
 import uvicorn
+
 from src.main import app
 
 

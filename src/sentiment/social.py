@@ -70,7 +70,7 @@ async def get_twitter_sentiment(
     Returns concatenated tweet text for Claude analysis.
     """
     if not _check_tool_available("twitter"):
-        return f"[twitter-cli not installed — run: pipx install twitter-cli]"
+        return "[twitter-cli not installed — run: pipx install twitter-cli]"
 
     if accounts is None:
         accounts = ["whale_alert", "CryptoKaleo", "CoinDesk"]
@@ -107,7 +107,7 @@ async def get_reddit_sentiment(
     Returns concatenated post titles + scores for Claude analysis.
     """
     if not _check_tool_available("rdt"):
-        return f"[rdt-cli not installed — run: pipx install rdt-cli && rdt login]"
+        return "[rdt-cli not installed — run: pipx install rdt-cli && rdt login]"
 
     if subreddits is None:
         subreddits = ["CryptoCurrency", "bitcoin", "ethtrader"]

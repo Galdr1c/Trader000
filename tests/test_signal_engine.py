@@ -2,15 +2,14 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from src.signal_engine.scoring import (
-    calculate_signal_strength,
-    SignalResult,
-    SignalWeights,
-)
 from src.signal_engine.dynamic_tp import calculate_dynamic_tp
 from src.signal_engine.indicators import compute_all
+from src.signal_engine.scoring import (
+    SignalResult,
+    SignalWeights,
+    calculate_signal_strength,
+)
 
 
 def _make_row(

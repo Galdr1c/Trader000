@@ -13,7 +13,7 @@ import logging
 from collections import deque
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -21,7 +21,12 @@ from starlette.responses import PlainTextResponse
 
 from src.config import settings
 from src.monitoring.dashboard import DASHBOARD_HTML
-from src.monitoring.system import get_system_status, get_liveness, get_prometheus_metrics, record_alert
+from src.monitoring.system import (
+    get_liveness,
+    get_prometheus_metrics,
+    get_system_status,
+    record_alert,
+)
 from src.webhook.models import TVAlertPayload, WebhookResponse
 
 if TYPE_CHECKING:
